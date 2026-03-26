@@ -5,17 +5,28 @@ import pandas as pd
 import yfinance as yf
 import numpy as np
 import requests
+import time
+import random
 
 # ==========================================
-# 1. 系統核心設定與防封鎖機制 (解決 Rate Limit 問題)
+# 1. 系統核心設定與超強防封鎖引擎
 # ==========================================
-st.set_page_config(page_title="全齡智能理財戰情室 Pro Max", layout="wide", page_icon="📈")
+st.set_page_config(page_title="全齡智能理財戰情室 Pro Max", layout="wide", page_icon="🚀")
 
-# 建立一個全局 Session 並偽裝成一般瀏覽器，避免被 Yahoo Finance 封鎖
-def get_session():
+# 建立超級 Session：模擬最擬真的瀏覽器行為
+def get_robust_session():
     session = requests.Session()
+    # 隨機更換 User-Agent 模擬不同裝置
+    user_agents = [
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+    ]
     session.headers.update({
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        "User-Agent": random.choice(user_agents),
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+        "Accept-Language": "zh-TW,zh;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Upgrade-Insecure-Requests": "1"
     })
     return session
 
@@ -30,169 +41,188 @@ def parse_ticker(user_input):
     if clean_input.isdigit() and len(clean_input) == 4: return f"{clean_input}.TW"
     return clean_input
 
-@st.cache_data(ttl=43200) # 快取 12 小時
-def fetch_stock_data(ticker_symbol):
-    session = get_session()
+@st.cache_data(ttl=3600) # 縮短快取時間到 1 小時，確診數據新鮮度
+def fetch_stock_data_pro(ticker_symbol):
+    session = get_robust_session()
     stock = yf.Ticker(ticker_symbol, session=session)
+    
+    # 分段抓取：先抓歷史價格（最重要）
     hist = stock.history(period="1y")
-    info = stock.info
+    
+    # 嘗試抓取基本面（這部分最容易被封鎖，所以用 try 包起來）
+    info = {}
+    try:
+        info = stock.info
+    except:
+        info = {"trailingPE": "無法讀取", "dividendYield": None}
+        
     return hist, info
 
 # ==========================================
-# 網頁主視覺
+# 網頁主視覺：使用豐富的標題與樣式
 # ==========================================
-st.title("🌟 終極全齡智能理財與投資決策戰情室")
-st.write("已啟動防封鎖引擎。本系統為您整合目標試算、長短線雙引擎診斷與全資產管理。")
-st.divider()
+st.markdown("""
+    <style>
+    .main-title { font-size: 36px !important; font-weight: 800; color: #1E88E5; text-align: center; }
+    .sub-title { font-size: 18px; color: #555; text-align: center; margin-bottom: 30px; }
+    </style>
+    <div class="main-title">🌟 全齡智能理財與投資決策戰情室</div>
+    <div class="sub-title">整合全球數據與 AI 分析，專為 18-65 歲以上投資者打造的導航系統</div>
+    """, unsafe_allow_html=True)
 
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
-    "🎯 1. 財富目標試算", 
-    "📊 2. AI 深度診斷 (雙引擎)", 
-    "📈 3. 多標的績效大PK", 
-    "⚖️ 4. 理想資產配置", 
-    "💼 5. 我的真實總資產"
+    "🎯 財富目標試算", 
+    "📊 AI 深度診斷 (雙引擎)", 
+    "📈 多標績效大PK", 
+    "⚖️ 理想資產配置", 
+    "💼 我的總資產管理"
 ])
 
 # ==========================================
-# Tab 1: 財富目標與複利試算
+# Tab 1: 財富目標試算
 # ==========================================
 with tab1:
-    st.header("🎯 第一步：精算您的專屬財富藍圖")
-    col_p1, col_p2 = st.columns(2)
-    with col_p1:
-        init_inv = st.number_input("1. 目前單筆本金 (元)", value=100000, step=10000)
-        mon_inv = st.number_input("2. 每月定期定額 (元)", value=10000, step=1000)
-        inv_years = st.slider("3. 預計投資年限 (年)", 1, 50, 20)
-    with col_p2:
-        risk_prof = st.selectbox("您的風險屬性？", ["保守型 (3%)", "穩健型 (6%)", "積極型 (9%)"])
-        exp_ret = 3.0 if "保守" in risk_prof else 6.0 if "穩健" in risk_prof else 9.0
-    
-    if st.button("🚀 啟動財富藍圖運算", type="primary"):
-        y_list, p_list, i_list = [], [], []
+    st.header("🎯 規劃您的財富藍圖")
+    col1, col2 = st.columns(2)
+    with col1:
+        init_inv = st.number_input("💵 目前單筆本金 (元)", value=100000, step=10000)
+        mon_inv = st.number_input("🏦 每月定期定額 (元)", value=10000, step=1000)
+    with col2:
+        inv_years = st.slider("⏳ 投資年限 (年)", 1, 50, 20)
+        risk_choice = st.select_slider("🧠 風險承受度", options=["保守型", "穩健型", "積極型"], value="穩健型")
+        ret_map = {"保守型": 3.0, "穩健型": 6.0, "積極型": 9.0}
+        exp_ret = ret_map[risk_choice]
+
+    if st.button("🔥 立即精算回報", type="primary", use_container_width=True):
+        y_data = []
         total_m = total_p = init_inv
         for y in range(1, inv_years + 1):
-            total_m += (mon_inv * 12); total_p += (mon_inv * 12)
-            total_m += total_m * (exp_ret / 100)
-            y_list.append(y); p_list.append(total_p); i_list.append(total_m - total_p)
-        st.success(f"### 🎉 {inv_years} 年後預估總資產： **{total_m:,.0f} 元**")
-        fig_plan = px.area(pd.DataFrame({"年": y_list, "本金": p_list, "複利": i_list}), x="年", y=["本金", "複利"], title="📈 財富成長軌跡")
-        st.plotly_chart(fig_plan, use_container_width=True)
+            total_m = (total_m + mon_inv * 12) * (1 + exp_ret / 100)
+            total_p += (mon_inv * 12)
+            y_data.append({"年": y, "本金": total_p, "預估總資產": total_m})
+        
+        df = pd.DataFrame(y_data)
+        st.success(f"### 預估第 {inv_years} 年資產將達到： **{total_m:,.0f} 元**")
+        st.plotly_chart(px.area(df, x="年", y=["預估總資產", "本金"], title="財富積累曲線", color_discrete_map={"預估總資產": "#00CC96", "本金": "#636EFA"}), use_container_width=True)
 
 # ==========================================
-# Tab 2: 單一標的深度診斷 (核心 AI 建議)
+# Tab 2: AI 深度診斷 (核心功能 - 修正紅字問題)
 # ==========================================
 with tab2:
-    st.header("📊 第二步：單一標的 AI 深度診斷")
-    c_s1, c_s2 = st.columns([2, 1])
-    with c_s1:
-        raw_ticker = st.text_input("🔍 輸入標的代號或名稱：", "0050")
-    with c_s2:
-        trade_mode = st.radio("⚙️ 操作屬性：", ["🐢 穩健長線 (適合存股/退休)", "🐇 積極短線 (適合波段/盯盤)"])
+    st.header("📊 AI 投資策略診斷")
+    col_s1, col_s2 = st.columns([2, 1])
+    with col_s1:
+        u_input = st.text_input("🔍 輸入股票代號或名稱 (例如: 台積電, 0050, NVDA)", "0050")
+    with col_s2:
+        mode = st.radio("⚙️ 選擇您的投資流派：", ["🐢 穩健長線 (看趨勢與配息)", "🐇 積極短線 (看動能與指標)"])
 
-    if raw_ticker:
-        real_ticker = parse_ticker(raw_ticker)
+    if u_input:
+        target = parse_ticker(u_input)
         try:
-            with st.spinner('數據計算中...'):
-                hist, info = fetch_stock_data(real_ticker)
+            with st.spinner(f'正在為您調閱 {target} 的全球實時數據...'):
+                # 模擬人類操作延遲，降低被封鎖率
+                time.sleep(0.5) 
+                hist, info = fetch_stock_data_pro(target)
+                
                 if not hist.empty:
-                    close_prices = hist['Close'].dropna()
-                    latest_price = float(close_prices.iloc[-1])
+                    prices = hist['Close'].dropna()
+                    now_p = prices.iloc[-1]
                     
-                    # 計算指標
-                    ma5, ma20, ma60 = close_prices.rolling(5).mean().iloc[-1], close_prices.rolling(20).mean().iloc[-1], close_prices.rolling(60).mean().iloc[-1]
-                    max_dd = ((close_prices / close_prices.cummax()) - 1.0).min() * 100
+                    # 精確指標計算
+                    ma5, ma20, ma60 = prices.rolling(5).mean().iloc[-1], prices.rolling(20).mean().iloc[-1], prices.rolling(60).mean().iloc[-1]
+                    max_val = prices.max()
+                    mdd = (now_p - max_val) / max_val * 100
                     
-                    delta = close_prices.diff()
+                    # RSI 計算
+                    delta = prices.diff()
                     gain = (delta.where(delta > 0, 0)).rolling(14).mean()
                     loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
-                    rsi_14 = (100 - (100 / (1 + (gain / loss)))).iloc[-1]
+                    rsi = (100 - (100 / (1 + (gain / loss)))).iloc[-1]
 
-                    st.subheader(f"1. 核心數據儀表板 ({trade_mode[:2]})")
+                    # 數據顯示面板
+                    st.markdown(f"### 📋 {target} 診斷報告")
                     m1, m2, m3, m4 = st.columns(4)
-                    m1.metric("最新收盤價", f"{latest_price:.2f}")
+                    m1.metric("當前股價", f"{now_p:.2f}")
                     
-                    if "穩健長線" in trade_mode:
-                        yield_pct = info.get('dividendYield', None)
-                        yield_str = f"{yield_pct * 100:.2f}%" if yield_pct else "N/A"
-                        m2.metric("長線趨勢", "🟢 多頭" if latest_price > ma60 else "🔴 空頭")
-                        m3.metric("本益比", info.get('trailingPE', 'N/A'))
-                        m4.metric("近一年殖利率", yield_str)
+                    if "穩健長線" in mode:
+                        m2.metric("長線位階", "🟢 高於季線" if now_p > ma60 else "🔴 低於季線")
+                        m3.metric("本益比", info.get('trailingPE', '數據受限'))
+                        m4.metric("歷史回撤", f"{mdd:.1f}%")
                         
-                        st.subheader("🤖 2. 系統指引：長線投資策略")
-                        if latest_price > ma60: st.success("**🟢 安心續抱**：長線趨勢強勁，適合持續定期定額。")
-                        else: st.warning("**🔴 保守觀望**：價格跌破生命線，建議等待止穩再補貨。")
+                        st.info("💡 **長線 AI 指引：**")
+                        if now_p > ma60: st.write("✅ 趨勢仍屬多頭，建議分批加碼或持續定期定額。")
+                        else: st.write("⚠️ 目前處於弱勢區，建議保留現金，待股價重回 60 日均線後再行考慮。")
                     else:
-                        m2.metric("短線動能", "🔥 強勢" if latest_price > ma5 else "❄️ 轉弱")
-                        m3.metric("RSI (14日)", f"{rsi_14:.1f}")
+                        m2.metric("短線動能", "🔥 強勢" if now_p > ma5 else "❄️ 弱勢")
+                        m3.metric("RSI (14日)", f"{rsi:.1f}")
                         m4.metric("月線支撐", f"{ma20:.2f}")
                         
-                        st.subheader("🤖 2. 系統指引：短線波段戰術")
-                        if rsi_14 > 70: st.error("**🚨 警戒**：短線過熱，不宜追高。")
-                        elif rsi_14 < 30: st.success("**🎯 契機**：跌入超賣區，反彈機會大。")
-                        else: st.info("**📈 持續**：動能穩定，依均線操作。")
+                        st.info("💡 **短線 AI 指引：**")
+                        if rsi > 70: st.warning("⚠️ RSI 進入超買區，短線追高風險極大，建議部分獲利了結。")
+                        elif rsi < 30: st.success("🎯 RSI 進入超賣區，跌勢可能衰竭，可留意短線反彈契機。")
+                        else: st.write("📉 目前處於中性區間，請依照 5 日線與 20 日線扣抵值進行順勢操作。")
 
+                    # 圖表
                     fig = go.Figure()
-                    fig.add_trace(go.Scatter(x=close_prices.index, y=close_prices, name='收盤價'))
-                    line_ma = ma60 if "長線" in trade_mode else ma5
-                    fig.add_trace(go.Scatter(x=close_prices.index, y=close_prices.rolling(60 if "長線" in trade_mode else 5).mean(), name='參考均線'))
+                    fig.add_trace(go.Scatter(x=prices.index, y=prices, name='收盤價', line=dict(color='#1f77b4', width=2)))
+                    main_ma = ma60 if "長線" in mode else ma5
+                    fig.add_trace(go.Scatter(x=prices.index, y=prices.rolling(60 if "長線" in mode else 5).mean(), name='參考趨勢線', line=dict(dash='dash')))
                     st.plotly_chart(fig, use_container_width=True)
-                else: st.warning("找不到資料。")
-        except: st.error("資料獲取失敗，請重新整理或檢查代號。")
+                else:
+                    st.error("此代號找不到歷史價格，請確認代號是否正確。")
+        except Exception as e:
+            st.error(f"⚠️ 數據引擎暫時受阻：{e}。請稍候 10 秒再重新點選分析。")
 
 # ==========================================
-# Tab 3: 多標的績效大PK
+# Tab 3: 多標績效大PK
 # ==========================================
 with tab3:
-    st.header("📈 第三步：多標的績效大PK")
-    tk_in = st.text_input("🔍 輸入多檔代號 (用逗號隔開)：", "台積電, 0050, AAPL")
-    if tk_in:
-        t_list = [parse_ticker(t.strip()) for t in tk_in.split(",") if t.strip()]
-        try:
-            with st.spinner('計算中...'):
-                data = yf.download(t_list, period="1y", session=get_session())['Close']
-                if not data.empty:
-                    data_norm = (data / data.iloc[0]) * 100
-                    st.plotly_chart(px.line(data_norm, title="過去一年相對表現 (基準100)"), use_container_width=True)
-        except: st.error("PK 資料抓取失敗。")
+    st.header("📈 多標的績效大PK")
+    pk_input = st.text_input("🔍 輸入多檔代號 (例如: 2330.TW, 0050.TW, AAPL)", "2330.TW, 0050.TW, 0056.TW")
+    if pk_input:
+        with st.spinner('正在比對數據...'):
+            tk_list = [t.strip().upper() for t in pk_input.split(",")]
+            pk_data = yf.download(tk_list, period="1y", session=get_robust_session())['Close']
+            if not pk_data.empty:
+                norm_data = (pk_data / pk_data.iloc[0]) * 100
+                st.plotly_chart(px.line(norm_data, title="過去一年相對累積報酬率 (起點為100)"), use_container_width=True)
 
 # ==========================================
 # Tab 4: 理想資產配置
 # ==========================================
 with tab4:
-    st.header("⚖️ 第四步：理想資產配置建議")
-    u_age = st.slider("年齡", 18, 80, 30)
-    u_risk = st.selectbox("承受大跌能力？", ["低", "中", "高"])
-    if u_risk == "高" and u_age < 40: alloc = [70, 20, 10]
-    elif u_risk == "低" or u_age > 60: alloc = [20, 50, 30]
-    else: alloc = [50, 30, 20]
-    st.plotly_chart(px.pie(values=alloc, names=["股票", "債券", "現金"], hole=0.4), use_container_width=True)
+    st.header("⚖️ 全齡資產配置建議")
+    u_age = st.number_input("您的年齡", 18, 100, 35)
+    u_risk = st.radio("您的投資心態", ["極度保守 (怕虧損)", "中規中矩 (想超前通膨)", "積極進取 (拼資產翻倍)"])
+    
+    if u_risk == "積極進取" and u_age < 45: shares, bonds, cash = 75, 20, 5
+    elif u_risk == "極度保守" or u_age > 60: shares, bonds, cash = 20, 60, 20
+    else: shares, bonds, cash = 50, 40, 10
+    
+    st.plotly_chart(px.pie(values=[shares, bonds, cash], names=["股票", "債券", "現金"], hole=0.5, title="AI 建議資產比例"), use_container_width=True)
 
 # ==========================================
-# Tab 5: 我的真實總資產
+# Tab 5: 我的總資產管理 (強化穩定性)
 # ==========================================
 with tab5:
-    st.header("💼 第五步：我的真實總資產管理")
-    if 'p' not in st.session_state:
-        st.session_state.p = pd.DataFrame({"名稱": ["0050.TW", "現金"], "類別": ["股票型", "現金"], "數量": [100.0, 1.0], "成本": [130.0, 10000.0]})
+    st.header("💼 我的真實總資產")
+    if 'my_assets' not in st.session_state:
+        st.session_state.my_assets = pd.DataFrame({"標的": ["0050.TW", "現金"], "類別": ["股票", "現金"], "數量": [100.0, 1.0], "成本價": [130.0, 10000.0]})
     
-    e_df = st.data_editor(st.session_state.p, num_rows="dynamic", use_container_width=True)
+    edited_df = st.data_editor(st.session_state.my_assets, num_rows="dynamic", use_container_width=True)
 
-    if st.button("🔄 一鍵結算身價", type="primary"):
-        with st.spinner("更新報價中..."):
-            res, total = [], 0
-            for _, r in e_df.iterrows():
+    if st.button("🔄 同步最新報價並結算", type="primary"):
+        total_value = 0
+        for _, row in edited_df.iterrows():
+            curr_p = row["成本價"]
+            if row["類別"] == "股票":
                 try:
-                    p_now = r["成本"]
-                    if r["類別"] == "股票型":
-                        ticker = parse_ticker(str(r["名稱"]))
-                        d = yf.Ticker(ticker, session=get_session()).history(period="1d")
-                        if not d.empty: p_now = d['Close'].iloc[-1]
-                    val = r["數量"] * p_now
-                    total += val
-                    res.append({"標的": r["名稱"], "市值": val})
+                    d = yf.Ticker(row["標的"], session=get_robust_session()).history(period="1d")
+                    if not d.empty: curr_p = d['Close'].iloc[-1]
                 except: pass
-            st.success(f"### 🏦 總資產結算： **{total:,.0f} 元**")
-            st.plotly_chart(px.pie(pd.DataFrame(res), values="市值", names="標的"), use_container_width=True)
+            total_value += row["數量"] * curr_p
+        st.balloons()
+        st.metric("估算總身價 (TWD)", f"{total_value:,.0f}")
 
 st.divider()
-st.caption("🚨 **免責聲明**：本系統採用 Yahoo Finance 免費數據，僅供參考，不代表投資建議。投資必定有風險，請審慎評估。")
+st.caption("🚨 免責聲明：本系統數據源自 Yahoo Finance，僅供學習與決策輔助，不構成投資建議。投資必定有風險，請使用者依個人財務狀況審慎評估。")
